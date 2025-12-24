@@ -232,9 +232,15 @@ const char *latestFeatures[] = {
 #define SPACE ((char)' ')
 #define EOFC (255)
 
+#if defined(KATTIS) || defined(DOMJUDGE) || defined(PC2)
+#define KATTIS_PROBLEM_PACKAGE
+#endif
+
 #ifndef OK_EXIT_CODE
 #   ifdef CONTESTER
 #       define OK_EXIT_CODE 0xAC
+#   elif defined(KATTIS_PROBLEM_PACKAGE)
+#       define OK_EXIT_CODE 42
 #   else
 #       define OK_EXIT_CODE 0
 #   endif
@@ -245,6 +251,8 @@ const char *latestFeatures[] = {
 #       define WA_EXIT_CODE 5
 #   elif defined(CONTESTER)
 #       define WA_EXIT_CODE 0xAB
+#   elif defined(KATTIS_PROBLEM_PACKAGE)
+#       define WA_EXIT_CODE 43
 #   else
 #       define WA_EXIT_CODE 1
 #   endif
@@ -255,6 +263,8 @@ const char *latestFeatures[] = {
 #       define PE_EXIT_CODE 4
 #   elif defined(CONTESTER)
 #       define PE_EXIT_CODE 0xAA
+#   elif defined(KATTIS_PROBLEM_PACKAGE)
+#       define PE_EXIT_CODE 43
 #   else
 #       define PE_EXIT_CODE 2
 #   endif
@@ -273,6 +283,8 @@ const char *latestFeatures[] = {
 #ifndef DIRT_EXIT_CODE
 #   ifdef EJUDGE
 #       define DIRT_EXIT_CODE 6
+#   elif defined(KATTIS_PROBLEM_PACKAGE)
+#       define DIRT_EXIT_CODE 43
 #   else
 #       define DIRT_EXIT_CODE 4
 #   endif
@@ -283,7 +295,11 @@ const char *latestFeatures[] = {
 #endif
 
 #ifndef UNEXPECTED_EOF_EXIT_CODE
-#   define UNEXPECTED_EOF_EXIT_CODE 8
+#   if defined(KATTIS_PROBLEM_PACKAGE)
+#       define UNEXPECTED_EOF_EXIT_CODE 43
+#   else
+#       define UNEXPECTED_EOF_EXIT_CODE 8
+#   endif
 #endif
 
 #ifndef PC_BASE_EXIT_CODE
@@ -4666,6 +4682,26 @@ void setAppesModeEncoding(std::string appesModeEncoding) {
     ::appesModeEncoding = appesModeEncoding;
 }
 
+NORETURN void __testlib_wrongInteractorArguments() {
+    quit(_fail, std::string("Program must be run with the following arguments: ") +
+#ifdef EJUDGE
+                std::string("<input-file> <output-file> [<answer-file>]") +
+#elifdef DOMJDUGE
+                std::string("<input-file> <answer-file> <report-dir>") +
+#else
+                std::string("<input-file> <output-file> [<answer-file> [<report-file> [<-appes>]]]") +
+#endif
+                "\nUse \"--help\" to get help information");
+}
+
+char __testlib_pathSeparator() {
+#ifdef ON_WINDOWS
+    return '\\';
+#else
+    return '/';
+#endif
+}
+
 void registerInteraction(int argc, char *argv[]) {
     __testlib_ensuresPreconditions();
     __testlib_set_testset_and_group(argc, argv);
@@ -4677,10 +4713,27 @@ void registerInteraction(int argc, char *argv[]) {
     if (argc > 1 && !strcmp("--help", argv[1]))
         __testlib_help();
 
+#ifdef KATTIS_PROBLEM_PACKAGE
+    if (argc != 4) __testlib_wrongInteractorArguments();
+    resultName = std::string(argv[3]) + __testlib_pathSeparator() + "judgemessage.txt";
+    appesMode = false;
+
+    inf.init(argv[1], _input);
+    tout.open(std::string(argv[3]) + __testlib_pathSeparator() + "teammessage.txt" , std::ios_base::out);
+    if (tout.fail() || !tout.is_open())
+        quit(_fail, std::string("Can not write to the test-output-file '") + argv[2] + std::string("'"));
+
+    ouf.init(stdin, _output);
+    ans.init(argv[2], _answer);
+#else
+#   ifdef EJUDGE
+    if (argc != 4) __testlib_wrongInteractorArguments();
+    resultName = "";
+    appesMode = false;
+#   else
+
     if (argc < 3 || argc > 6) {
-        quit(_fail, std::string("Program must be run with the following arguments: ") +
-                    std::string("<input-file> <output-file> [<answer-file> [<report-file> [<-appes>]]]") +
-                    "\nUse \"--help\" to get help information");
+        __testlib_wrongInteractorArguments();
     }
 
     if (argc <= 4) {
@@ -4688,7 +4741,6 @@ void registerInteraction(int argc, char *argv[]) {
         appesMode = false;
     }
 
-#ifndef EJUDGE
     if (argc == 5) {
         resultName = argv[4];
         appesMode = false;
@@ -4696,14 +4748,13 @@ void registerInteraction(int argc, char *argv[]) {
 
     if (argc == 6) {
         if (strcmp("-APPES", argv[5]) && strcmp("-appes", argv[5])) {
-            quit(_fail, std::string("Program must be run with the following arguments: ") +
-                        "<input-file> <output-file> <answer-file> [<report-file> [<-appes>]]");
+            __testlib_wrongInteractorArguments();
         } else {
             resultName = argv[4];
             appesMode = true;
         }
     }
-#endif
+#   endif
 
     inf.init(argv[1], _input);
 
@@ -4717,6 +4768,7 @@ void registerInteraction(int argc, char *argv[]) {
         ans.init(argv[3], _answer);
     else
         ans.name = "unopened answer stream";
+#endif
 }
 
 void registerValidation() {
@@ -4840,6 +4892,18 @@ public:
     }
 } checker;
 
+NORETURN void __testlib_wrongCheckerArgs() {
+    quit(_fail, std::string("Program must be run with the following arguments: ") +
+#ifdef EJUDGE
+            std::string("[--testset testset] [--group group] <input-file> <output-file> <answer-file> [<report-file>]") +
+#elifdef KATTIS_PROBLEM_PACKAGE
+            std::string("[--testset testset] [--group group] <input-file> <answer-file> <report-dir>") +
+#else
+            std::string("[--testset testset] [--group group] <input-file> <output-file> <answer-file> [<report-file> [<-appes>]]") +
+#endif
+            "\nUse \"--help\" to get help information");
+}
+
 void registerTestlibCmd(int argc, char *argv[]) {
     __testlib_ensuresPreconditions();
     __testlib_set_testset_and_group(argc, argv);
@@ -4870,10 +4934,22 @@ void registerTestlibCmd(int argc, char *argv[]) {
     if (argc > 1 && "--help" == args[1])
         __testlib_help();
 
+#ifdef KATTIS_PROBLEM_PACKAGE
+    if (argc != 4) __testlib_wrongCheckerArgs();
+    inf.init(args[1], _input);
+    ouf.init(stdin, _output);
+    ouf.skipBom();
+    ans.init(args[2], _answer);
+    resultName = args[3] + __testlib_pathSeparator() + "judgemessage.txt";
+    appesMode = false;
+#else
+#   ifdef EJUDGE
+    if (argc != 4) __testlib_wrongCheckerArgs();
+    resultName = "";
+    appesMode = false;
+#   else
     if (argc < 4 || argc > 6) {
-        quit(_fail, std::string("Program must be run with the following arguments: ") +
-                    std::string("[--testset testset] [--group group] <input-file> <output-file> <answer-file> [<report-file> [<-appes>]]") +
-                    "\nUse \"--help\" to get help information");
+        __testlib_wrongCheckerArgs();
     }
 
     if (argc == 4) {
@@ -4881,7 +4957,6 @@ void registerTestlibCmd(int argc, char *argv[]) {
         appesMode = false;
     }
 
-#ifndef EJUDGE
     if (argc == 5) {
         resultName = args[4];
         appesMode = false;
@@ -4889,19 +4964,18 @@ void registerTestlibCmd(int argc, char *argv[]) {
 
     if (argc == 6) {
         if ("-APPES" != args[5] && "-appes" != args[5]) {
-            quit(_fail, std::string("Program must be run with the following arguments: ") +
-                        "<input-file> <output-file> <answer-file> [<report-file> [<-appes>]]");
+            __testlib_wrongCheckerArgs();
         } else {
             resultName = args[4];
             appesMode = true;
         }
     }
-#endif
-
+#   endif
     inf.init(args[1], _input);
     ouf.init(args[2], _output);
     ouf.skipBom();
     ans.init(args[3], _answer);
+#endif
 }
 
 void registerTestlib(int argc, ...) {
